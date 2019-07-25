@@ -41,7 +41,7 @@ extern "C" {
 #include <cufft.h>
 
 #ifndef SINGLE_PRECISION
-	#define SINGLE_PRECISION 0
+	#define SINGLE_PRECISION 1
 #endif
 
 
@@ -70,10 +70,11 @@ extern "C" {
 #if SINGLE_PRECISION
 	#define SIN(x) sinf(x)
 	#define COS(x) cosf(x)
-	#define ABS(x) fabs(x)
+	#define ABS(x) fabsf(x)
 	#define SQRT(x) sqrtf(x)
 	#define ROUND(x) roundf(x)
 	#define CEIL(x) ceilf(x)
+	#define FLOOR(x) floorf(x)
 	#define MAKE_PRECISION2(x,y) make_float2(x,y)
 	#define MAKE_PRECISION3(x,y,z) make_float3(x,y,z)
 	#define MAKE_PRECISION4(x,y,z,w) make_float4(x,y,z,w)
@@ -81,9 +82,10 @@ extern "C" {
 #else
 	#define SIN(x) sin(x)
 	#define COS(x) cos(x)
-	#define ABS(x) abs(x)
+	#define ABS(x) fabs(x)
 	#define SQRT(x) sqrt(x)
 	#define ROUND(x) round(x)
+	#define FLOOR(x) floor(x)
 	#define CEIL(x) ceil(x)
 	#define MAKE_PRECISION2(x,y) make_double2(x,y)
 	#define MAKE_PRECISION3(x,y,z) make_double3(x,y,z)
@@ -135,37 +137,37 @@ extern "C" {
 
 	void init_config(Config *config);
 
-	void save_grid_to_file(Config *config, Complex *grid);
+	void save_grid_to_file(Config *config, Complex *grid, int startX, int rangeX,int startY, int rangeY);
 
 	bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_intensities);
 
 	void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw, 
 		Complex *vis_intensities, int num_visibilities, Complex *kernel,
-		int2 *kernel_supports, int num_kernel_samples, double *prolate);
+		int2 *kernel_supports, int num_kernel_samples, PRECISION *prolate);
 
-	void execute_CUDA_iFFT(Config *config, double2 *grid);
+	void execute_CUDA_iFFT(Config *config, PRECISION2 *grid);
 
 
-	__global__ void gridding(double2 *grid, const double2 *kernel, const int2 *supports,
-		const double3 *vis_uvw, const double2 *vis, const int num_vis, const int oversampling,
+	__global__ void gridding(PRECISION2 *grid, const PRECISION2 *kernel, const int2 *supports,
+		const PRECISION3 *vis_uvw, const PRECISION2 *vis, const int num_vis, const int oversampling,
 		const int grid_size, const double uv_scale, const double w_scale);
 
-	__global__ void fftshift_2D(double2 *grid, const int width);
+	__global__ void fftshift_2D(PRECISION2 *grid, const int width);
 
-	__global__ void execute_convolution_correction(double2 *grid, const double *prolate, const int grid_size);
+	__global__ void execute_convolution_correction(PRECISION2 *grid, const PRECISION *prolate, const int grid_size);
 
-	__device__ double2 complex_mult(const double2 z1, const double2 z2);
+	__device__ PRECISION2 complex_mult(const PRECISION2 z1, const PRECISION2 z2);
 
 	bool load_kernel(Config *config, Complex *kernel, int2 *kernel_supports);
 
-	void create_1D_half_prolate(double *prolate, int grid_size);
+	void create_1D_half_prolate(PRECISION *prolate, int grid_size);
 
 	double calc_spheroidal_sample(double nu);
 
 	int read_kernel_supports(Config *config, int2 *kernel_supports);
 
 	void clean_up(Complex **grid, Visibility **vis_uvw, Complex **vis_intensities,
-		Complex **kernel, int2 **kernel_supports, double **prolate);
+		Complex **kernel, int2 **kernel_supports, PRECISION **prolate);
 
 	static void check_cuda_error_aux(const char *file, unsigned line, const char *statement, cudaError_t err);
 

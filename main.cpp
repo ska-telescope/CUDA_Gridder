@@ -92,7 +92,7 @@ int main(int argc, char **argv)
 	printf(">>> UPDATE: Loading visibilities complete...\n");
 	
 	printf(">>> UPDATE: LOADING IN CONVOLUTION KERNEL SAMPLES... \n");
-	double *prolate = (double*) calloc(config.grid_size / 2, sizeof(double));
+	PRECISION *prolate = (PRECISION*) calloc(config.grid_size / 2, sizeof(PRECISION));
 	create_1D_half_prolate(prolate, config.grid_size);
 	if(!prolate)
 	{
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
 	printf(">>> UPDATE: Gridding complete...\n");
 
 	printf(">>> UPDATE: Saving grid to file...\n");
-	save_grid_to_file(&config, grid);
+	save_grid_to_file(&config, grid, 0,config.grid_size,0,config.grid_size);
 	printf(">>> UPDATE: Save successful...\n");
 	
 	printf(">>> UPDATE: Cleaning up allocated resources...\n");
