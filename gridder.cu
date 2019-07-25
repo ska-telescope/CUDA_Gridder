@@ -100,23 +100,23 @@ void init_config(Config *config)
 
 void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw, 
 	Complex *vis_intensities, int num_visibilities, Complex *kernel,
-	int2 *kernel_supports, int num_kernel_samples, double *prolate)
+	int2 *kernel_supports, int num_kernel_samples, PRECISION *prolate)
 {
 	cudaEvent_t start, stop;
 	// Handles for GPU memory
-	double2 *d_grid;
-	double2 *d_kernel;
-	double3 *d_vis_uvw;
-	double2 *d_vis;
+	PRECISION2 *d_grid;
+	PRECISION2 *d_kernel;
+	PRECISION3 *d_vis_uvw;
+	PRECISION2 *d_vis;
 	int2 *d_supports;
-	double *d_prolate;
+	PRECISION *d_prolate;
 
 	int grid_size_square = config->grid_size * config->grid_size;
-	CUDA_CHECK_RETURN(cudaMalloc(&d_grid, sizeof(double2) * grid_size_square));
+	CUDA_CHECK_RETURN(cudaMalloc(&d_grid, sizeof(PRECISION2) * grid_size_square));
 	cudaDeviceSynchronize();
 
-	CUDA_CHECK_RETURN(cudaMalloc(&d_kernel, sizeof(double2) * num_kernel_samples));
-	CUDA_CHECK_RETURN(cudaMemcpy(d_kernel, kernel, sizeof(double2) * num_kernel_samples,
+	CUDA_CHECK_RETURN(cudaMalloc(&d_kernel, sizeof(PRECISION2) * num_kernel_samples));
+	CUDA_CHECK_RETURN(cudaMemcpy(d_kernel, kernel, sizeof(PRECISION2) * num_kernel_samples,
 		cudaMemcpyHostToDevice));
 	cudaDeviceSynchronize();
 
@@ -126,14 +126,14 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	cudaDeviceSynchronize();
 
 	// Allocate and copy visibility uvw to device
-	CUDA_CHECK_RETURN(cudaMalloc(&d_vis_uvw, sizeof(double3) * num_visibilities));
-	CUDA_CHECK_RETURN(cudaMemcpy(d_vis_uvw, vis_uvw, sizeof(double3) * num_visibilities,
+	CUDA_CHECK_RETURN(cudaMalloc(&d_vis_uvw, sizeof(PRECISION3) * num_visibilities));
+	CUDA_CHECK_RETURN(cudaMemcpy(d_vis_uvw, vis_uvw, sizeof(PRECISION3) * num_visibilities,
 		cudaMemcpyHostToDevice));
 	cudaDeviceSynchronize();
 
 	// Allocate memory on device for storing extracted complex visibilities
-	CUDA_CHECK_RETURN(cudaMalloc(&d_vis, sizeof(double2) * num_visibilities));
-	CUDA_CHECK_RETURN(cudaMemcpy(d_vis, vis_intensities, sizeof(double2) * num_visibilities,
+	CUDA_CHECK_RETURN(cudaMalloc(&d_vis, sizeof(PRECISION2) * num_visibilities));
+	CUDA_CHECK_RETURN(cudaMemcpy(d_vis, vis_intensities, sizeof(PRECISION2) * num_visibilities,
 		cudaMemcpyHostToDevice));
 	cudaDeviceSynchronize();
 
@@ -177,9 +177,9 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	//Execute iDFT and Forward CC
 	if(config->perform_iFFT_CC)
 	{
-		printf("UPDATE >>> PERFORMING iFFT... \n");
+		printf(">>> UPDATE: PERFORMING iFFT... \n");
 		execute_CUDA_iFFT(config, d_grid);
-		printf("UPDATE >>> iFFT DONE... \n");
+		printf(">>> UPDATE: iFFT DONE... \n");
 		cudaDeviceSynchronize();
 
 
@@ -189,8 +189,8 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 		dim3 cc_threads(max_threads_per_block_dimension, max_threads_per_block_dimension, 1);
 
 		printf("UPDATE >>> PERFORMING CONVOLUTION CORRECTION... \n");
-		CUDA_CHECK_RETURN(cudaMalloc(&d_prolate, sizeof(double) * config->grid_size/2));
-		CUDA_CHECK_RETURN(cudaMemcpy(d_prolate, prolate, sizeof(double) * config->grid_size/2, cudaMemcpyHostToDevice));
+		CUDA_CHECK_RETURN(cudaMalloc(&d_prolate, sizeof(PRECISION) * config->grid_size/2));
+		CUDA_CHECK_RETURN(cudaMemcpy(d_prolate, prolate, sizeof(PRECISION) * config->grid_size/2, cudaMemcpyHostToDevice));
 		cudaDeviceSynchronize();
 		execute_convolution_correction<<<cc_blocks, cc_threads>>>(d_grid, d_prolate, config->grid_size);
 		cudaDeviceSynchronize();
@@ -203,7 +203,7 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	}
 
 	printf("UPDATE >>> COPYING GRID BACK TO CPU.... \n");
-	CUDA_CHECK_RETURN(cudaMemcpy(grid, d_grid, grid_size_square * sizeof(double2),
+	CUDA_CHECK_RETURN(cudaMemcpy(grid, d_grid, grid_size_square * sizeof(PRECISION2),
  		cudaMemcpyDeviceToHost));
 	cudaDeviceSynchronize();
 
@@ -214,7 +214,7 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	printf("PIPELINE COMPLETE.... \n");
 }
 
-void execute_CUDA_iFFT(Config *config, double2 *grid)
+void execute_CUDA_iFFT(Config *config, PRECISION2 *grid)
 {
 	int grid_size = config->grid_size;
 
@@ -231,8 +231,8 @@ void execute_CUDA_iFFT(Config *config, double2 *grid)
 	printf("Performing 2D FFT...\n");
 	// Perform 2D FFT
 	cufftHandle fft_plan;
-	CUFFT_SAFE_CALL(cufftPlan2d(&fft_plan, grid_size, grid_size, CUFFT_Z2Z));
-	CUFFT_SAFE_CALL(cufftExecZ2Z(fft_plan, grid, grid, CUFFT_INVERSE));
+	CUFFT_SAFE_CALL(cufftPlan2d(&fft_plan, grid_size, grid_size, CUFFT_P2P));
+	CUFFT_SAFE_CALL(CUFFT_EXECUTE_P2P(fft_plan, grid, grid, CUFFT_INVERSE));
 	cudaDeviceSynchronize();
 
 	printf("Shifting grid data back into place...\n");
@@ -241,7 +241,7 @@ void execute_CUDA_iFFT(Config *config, double2 *grid)
 	cudaDeviceSynchronize();
 }
 
-__global__ void execute_convolution_correction(double2 *grid, const double *prolate, const int grid_size)
+__global__ void execute_convolution_correction(PRECISION2 *grid, const PRECISION *prolate, const int grid_size)
 {
 	const int row_index = threadIdx.y + blockDim.y * blockIdx.y;
     const int col_index = threadIdx.x + blockDim.x * blockIdx.x;
@@ -252,13 +252,13 @@ __global__ void execute_convolution_correction(double2 *grid, const double *prol
     const int grid_index = row_index * grid_size + col_index;
     const int half_grid_size = grid_size / 2;
 
-    const double taper = prolate[abs(col_index - half_grid_size)] * prolate[abs(row_index - half_grid_size)];
+    const PRECISION taper = prolate[abs(col_index - half_grid_size)] * prolate[abs(row_index - half_grid_size)];
 
 
-    grid[grid_index].x = (abs(taper) > (1E-10)) ? grid[grid_index].x / taper  : 0.0;
+    grid[grid_index].x = (ABS(taper) > (1E-10)) ? grid[grid_index].x / taper  : 0.0;
 }
 
-void create_1D_half_prolate(double *prolate, int grid_size)
+void create_1D_half_prolate(PRECISION *prolate, int grid_size)
 {
 	int grid_half_size = grid_size / 2;
 	double nu = 0.0;
@@ -266,7 +266,7 @@ void create_1D_half_prolate(double *prolate, int grid_size)
 	for(int index = 0; index < grid_half_size; ++index)
 	{
 		nu = ((double)index / (double)grid_half_size);
-		prolate[index] = calc_spheroidal_sample(nu);
+		prolate[index] = (PRECISION)calc_spheroidal_sample(nu);
 	}
 }
 
@@ -314,7 +314,7 @@ double calc_spheroidal_sample(double nu)
     return (bottom == 0.0) ? 0.0 : top/bottom;
 }
 
-__global__ void fftshift_2D(double2 *grid, const int width)
+__global__ void fftshift_2D(PRECISION2 *grid, const int width)
 {
     int row_index = threadIdx.y + blockDim.y * blockIdx.y;
     int col_index = threadIdx.x + blockDim.x * blockIdx.x;
@@ -322,7 +322,7 @@ __global__ void fftshift_2D(double2 *grid, const int width)
     if(row_index >= width || col_index >= width)
         return;
  
-    double a = 1 - 2 * ((row_index + col_index) & 1);
+    int a = 1 - 2 * ((row_index + col_index) & 1);
     grid[row_index * width + col_index].x *= a;
     grid[row_index * width + col_index].y *= a;
 }
@@ -350,13 +350,13 @@ int read_kernel_supports(Config *config, int2 *kernel_supports)
 	return total_kernel_samples_needed;
 }
 
-__device__ double2 complex_mult(const double2 z1, const double2 z2)
+__device__ PRECISION2 complex_mult(const PRECISION2 z1, const PRECISION2 z2)
 {
-	return make_double2(z1.x * z2.x - z1.y * z2.y, z1.y * z2.x + z1.x * z2.y);
+	return MAKE_PRECISION2(z1.x * z2.x - z1.y * z2.y, z1.y * z2.x + z1.x * z2.y);
 }
 
-__global__ void gridding(double2 *grid, const double2 *kernel, const int2 *supports,
-	const double3 *vis_uvw, const double2 *vis, const int num_vis, const int oversampling,
+__global__ void gridding(PRECISION2 *grid, const PRECISION2 *kernel, const int2 *supports,
+	const PRECISION3 *vis_uvw, const PRECISION2 *vis, const int num_vis, const int oversampling,
 	const int grid_size, const double uv_scale, const double w_scale)
 {
 	const unsigned int vis_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -365,10 +365,10 @@ __global__ void gridding(double2 *grid, const double2 *kernel, const int2 *suppo
 		return;
 
 	// Represents index of w-projection kernel in supports array
-	const int plane_index = (int) round(sqrt(fabs(vis_uvw[vis_index].z * w_scale)));
+	const int plane_index = (int) ROUND(SQRT(ABS(vis_uvw[vis_index].z * w_scale)));
 
 	// Scale visibility uvw into grid coordinate space
-	const double2 grid_coord = make_double2(
+	const PRECISION2 grid_coord = MAKE_PRECISION2(
 		vis_uvw[vis_index].x * uv_scale,
 		vis_uvw[vis_index].y * uv_scale
 	);
@@ -376,26 +376,26 @@ __global__ void gridding(double2 *grid, const double2 *kernel, const int2 *suppo
 	const int half_grid_size = grid_size / 2;
 	const int half_support = supports[plane_index].x;
 
-	double conjugate = (vis_uvw[vis_index].z < 0.0) ? -1.0 : 1.0;
+	PRECISION conjugate = (vis_uvw[vis_index].z < 0.0) ? -1.0 : 1.0;
 
-	const double2 snapped_grid_coord = make_double2(
-		round(grid_coord.x * oversampling) / oversampling,
-		round(grid_coord.y * oversampling) / oversampling
+	const PRECISION2 snapped_grid_coord = MAKE_PRECISION2(
+		ROUND(grid_coord.x * oversampling) / oversampling,
+		ROUND(grid_coord.y * oversampling) / oversampling
 	);
 
-	const double2 min_grid_point = make_double2(
-		ceil(snapped_grid_coord.x - half_support),
-		ceil(snapped_grid_coord.y - half_support)
+	const PRECISION2 min_grid_point = MAKE_PRECISION2(
+		CEIL(snapped_grid_coord.x - half_support),
+		CEIL(snapped_grid_coord.y - half_support)
 	);
 
-	const double2 max_grid_point = make_double2(
-		floor(snapped_grid_coord.x + half_support),
-		floor(snapped_grid_coord.y + half_support)
+	const PRECISION2 max_grid_point = MAKE_PRECISION2(
+		FLOOR(snapped_grid_coord.x + half_support),
+		FLOOR(snapped_grid_coord.y + half_support)
 	);
 
-	double2 grid_point = make_double2(0.0, 0.0);
-	double2 convolved = make_double2(0.0, 0.0);
-	double2 kernel_sample = make_double2(0.0, 0.0);
+	PRECISION2 grid_point = MAKE_PRECISION2(0.0, 0.0);
+	PRECISION2 convolved = MAKE_PRECISION2(0.0, 0.0);
+	PRECISION2 kernel_sample = MAKE_PRECISION2(0.0, 0.0);
 	int2 kernel_uv_index = make_int2(0, 0);
 
 	int grid_index = 0;
@@ -404,15 +404,15 @@ __global__ void gridding(double2 *grid, const double2 *kernel, const int2 *suppo
 
 	for(int grid_v = min_grid_point.y; grid_v <= max_grid_point.y; ++grid_v)
 	{	
-		kernel_uv_index.y = abs((int)round((grid_v - snapped_grid_coord.y) * oversampling));
+		kernel_uv_index.y = abs((int)ROUND((grid_v - snapped_grid_coord.y) * oversampling));
 		
 		for(int grid_u = min_grid_point.x; grid_u <= max_grid_point.x; ++grid_u)
 		{
-			kernel_uv_index.x = abs((int)round((grid_u - snapped_grid_coord.x) * oversampling));
+			kernel_uv_index.x = abs((int)ROUND((grid_u - snapped_grid_coord.x) * oversampling));
 
 			kernel_index = w_kernel_offset + kernel_uv_index.y * (half_support + 1)
 				* oversampling + kernel_uv_index.x;
-			kernel_sample = make_double2(kernel[kernel_index].x, kernel[kernel_index].y  * conjugate);
+			kernel_sample = MAKE_PRECISION2(kernel[kernel_index].x, kernel[kernel_index].y  * conjugate);
 
 			grid_index = (grid_v + half_grid_size) * grid_size + (grid_u + half_grid_size);
 
@@ -423,7 +423,7 @@ __global__ void gridding(double2 *grid, const double2 *kernel, const int2 *suppo
 	}
 }
  
-void save_grid_to_file(Config *config, Complex *grid)
+void save_grid_to_file(Config *config, Complex *grid, int startX, int rangeX, int startY, int rangeY)
 {
     FILE *file_real = fopen(config->grid_real_dest_file, "w");
     FILE *file_imag = fopen(config->grid_imag_dest_file, "w");
@@ -436,23 +436,21 @@ void save_grid_to_file(Config *config, Complex *grid)
 		return;
 	}
 
-
-
-    for(int row = 0; row < config->grid_size; ++row)
+    for(int row = startY; row < startY+rangeY; ++row)
     {
-    	for(int col = 0; col < config->grid_size; ++col)
+    	for(int col = startX; col < startX+rangeX; ++col)
         {
             Complex grid_point = grid[row * config->grid_size + col];
 
-            if(col < (config->grid_size - 1))
+            if(SINGLE_PRECISION)
             {
-            	fprintf(file_real, "%.10f,", grid_point.real);
-            	fprintf(file_imag, "%.10f,", grid_point.imag);
+            	fprintf(file_real, "%f ", grid_point.real);
+            	fprintf(file_imag, "%f ", grid_point.imag);
             }
             else
             {
-            	fprintf(file_real, "%.10f", grid_point.real);
-            	fprintf(file_imag, "%.10f", grid_point.imag);
+            	fprintf(file_real, "%lf ", grid_point.real);
+            	fprintf(file_imag, "%lf ", grid_point.imag);
             }
         }
 
@@ -484,11 +482,19 @@ bool load_kernel(Config *config, Complex *kernel, int2 *kernel_supports)
 
 		for(int sample_number = 0; sample_number < number_samples_in_kernel; ++sample_number)
 		{	
-			float real = 0.0;
-			float imag = 0.0;
+			PRECISION real = 0.0;
+			PRECISION imag = 0.0; 
 
-			fscanf(kernel_real_file, "%f ", &real);
-			fscanf(kernel_imag_file, "%f ", &imag);
+            if(SINGLE_PRECISION)
+            {
+				fscanf(kernel_real_file, "%f ", &real);
+				fscanf(kernel_imag_file, "%f ", &imag);
+            }
+            else
+            {
+				fscanf(kernel_real_file, "%lf ", &real);
+				fscanf(kernel_imag_file, "%lf ", &imag);
+            }
 
 			kernel[kernel_index] = (Complex) {.real = real, .imag = imag};
 			kernel_index++;
@@ -527,34 +533,38 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 	}
 	
 	// Load visibility uvw coordinates into memory
-	double vis_u = 0.0;
-	double vis_v = 0.0;
-	double vis_w = 0.0;
-	double vis_real = 0.0;
-	double vis_imag = 0.0;
-	double vis_weight = 0.0;
-	double meters_to_wavelengths = config->frequency_hz / C;
+	PRECISION vis_u = 0.0;
+	PRECISION vis_v = 0.0;
+	PRECISION vis_w = 0.0;
+	PRECISION vis_real = 0.0;
+	PRECISION vis_imag = 0.0;
+	PRECISION vis_weight = 0.0;
+	PRECISION meters_to_wavelengths = config->frequency_hz / C;
 
 	for(int vis_index = 0; vis_index < num_vis; ++vis_index)
 	{
-		fscanf(vis_file, "%lf %lf %lf %lf %lf %lf\n", &vis_u, &vis_v,
-			&vis_w, &vis_real, &vis_imag, &vis_weight);
+		if(SINGLE_PRECISION)
+			fscanf(vis_file, "%f %f %f %f %f %f\n", &vis_u, &vis_v,
+				&vis_w, &vis_real, &vis_imag, &vis_weight);
+		else
+			fscanf(vis_file, "%lf %lf %lf %lf %lf %lf\n", &vis_u, &vis_v,
+				&vis_w, &vis_real, &vis_imag, &vis_weight);
 	
 		(*vis_uvw)[vis_index] = (Visibility) {
 			.u = vis_u * meters_to_wavelengths,
 			.v = vis_v * meters_to_wavelengths,
-			.w = (config->force_zero_w_term) ? 0.0 : vis_w * meters_to_wavelengths 
+			.w = (config->force_zero_w_term) ? (PRECISION)0.0 : vis_w * meters_to_wavelengths 
 		};
 
-		if(config->right_ascension)
+		if(config->right_ascension)  
 		{
 			(*vis_uvw)[vis_index].u *= -1.0;
 			(*vis_uvw)[vis_index].w *= -1.0;
 		}
 
 		(*vis_intensities)[vis_index] = (Complex) {
-			.real = vis_real * vis_weight,
-			.imag = vis_imag * vis_weight
+			.real = vis_real * 1.0,//vis_weight,
+			.imag = vis_imag * 1.0//vis_weight
 		};
 	}
 
@@ -564,7 +574,7 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 }
 
 void clean_up(Complex **grid, Visibility **vis_uvw, Complex **vis_intensities,
-	Complex **kernel, int2 **kernel_supports, double **prolate)
+	Complex **kernel, int2 **kernel_supports, PRECISION **prolate)
 {
 	if(*grid) 			 free(*grid);
 	if(*vis_uvw) 	 	 free(*vis_uvw);
