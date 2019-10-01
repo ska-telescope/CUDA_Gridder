@@ -563,8 +563,8 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 		}
 
 		(*vis_intensities)[vis_index] = (Complex) {
-			.real = vis_real * 1.0,//vis_weight,
-			.imag = vis_imag * 1.0//vis_weight
+			.real = vis_real * vis_weight,
+			.imag = vis_imag * vis_weight
 		};
 	}
 
