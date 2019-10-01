@@ -44,7 +44,7 @@
 
 void init_config(Config *config)
 {
-	config->grid_size = 18000;
+	config->grid_size = 5000;
 	
 	config->right_ascension = true;
 
@@ -70,20 +70,20 @@ void init_config(Config *config)
 	// Number of visibilities to process
 	config->num_visibilities = 100;
 
-	config->grid_real_dest_file = "../../gridder_test_data/grids/grid_real_oxford.csv";
+	config->grid_real_dest_file = "../gridder_test_data/grid_real_oxford.csv";
 
-	config->grid_imag_dest_file = "../../gridder_test_data/grids/grid_imag_oxford.csv";
+	config->grid_imag_dest_file = "../gridder_test_data/grid_imag_oxford.csv";
 
 	// File location to load pre-calculated w-projection kernel
-	config->kernel_real_source_file = "../../gridder_test_data/el82-el70_kernel_real.csv";
+	config->kernel_real_source_file = "../gridder_test_data/el82-el70_kernel_real.csv";
 
-	config->kernel_imag_source_file = "../../gridder_test_data/el82-el70_kernel_imag.csv";
+	config->kernel_imag_source_file = "../gridder_test_data/el82-el70_kernel_imag.csv";
 
 	// Specify file which holds the supports for all kernels
-	config->kernel_support_file = "../../gridder_test_data/el82-el70_kernel_supports.csv";
+	config->kernel_support_file = "../gridder_test_data/el82-el70_kernel_supports.csv";
 
 	// File location to load visibility uvw coordinates  
-	config->visibility_source_file = "../../gridder_test_data/el82-70.txt";   
+	config->visibility_source_file = "../gridder_test_data/el82-70.txt";   
 
 	// Number of CUDA threads per block - this is GPU specific
 	config->gpu_max_threads_per_block = 1024;

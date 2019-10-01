@@ -39,6 +39,21 @@ int main(int argc, char **argv)
 	Config config;
 	init_config(&config);
 
+	/* 
+		For reference, command line arguments are as follows:
+		argv[0] = program name
+		argv[1] = file location for incoming visibility file
+		argv[2] = file location for outgoing grid real file
+		argv[3] = file location for outgoing grid imag file
+	*/
+	if(argc == 4)
+	{	
+		printf(">>> INFO: Program \"%s\" accepting command line arguments, defaults will be replaced by args 1 to 3\n", argv[0]);
+		config.visibility_source_file = argv[1];
+		config.grid_real_dest_file = argv[2];
+		config.grid_imag_dest_file = argv[3];
+	}
+
 	printf(">>> UPDATE: Determining memory requirements for convolution kernels...\n");
 	int2 *kernel_supports = (int2*) calloc(config.num_wproj_kernels, sizeof(int2));
     if(kernel_supports == NULL)
@@ -100,7 +115,6 @@ int main(int argc, char **argv)
 	    clean_up(&grid, &vis_uvw, &vis_intensities, &kernel, &kernel_supports, &prolate);
 	    return EXIT_FAILURE;
 	}	
-
 
 	printf(">>> UPDATE: Performing W-Projection based convolutional gridding...\n");
 	execute_gridding(&config, grid, vis_uvw, vis_intensities, config.num_visibilities,
