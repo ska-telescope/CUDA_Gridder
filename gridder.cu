@@ -45,13 +45,13 @@
 void init_config(Config *config)
 {
 	config->grid_size = 5000;
-	
+
 	config->right_ascension = true;
 
 	config->force_zero_w_term = false;
-	
+
 	config->cell_size = 6.39708380288950e-6;
-	
+
 	config->frequency_hz = 100e6;
 
 	// Specify the number of kernels used in w projection
@@ -63,10 +63,10 @@ void init_config(Config *config)
 
 	// Kernel oversampling factor
 	config->oversampling = 4; // Oxford configuration
-	
+
 	// Used to convert visibility uvw coordinates into grid coordinates
 	config->uv_scale = config->grid_size * config->cell_size;
-	
+
 	// Number of visibilities to process
 	config->num_visibilities = 100;
 
@@ -82,8 +82,8 @@ void init_config(Config *config)
 	// Specify file which holds the supports for all kernels
 	config->kernel_support_file = "../gridder_test_data/el82-el70_kernel_supports.csv";
 
-	// File location to load visibility uvw coordinates  
-	config->visibility_source_file = "../gridder_test_data/el82-70.txt";   
+	// File location to load visibility uvw coordinates
+	config->visibility_source_file = "../gridder_test_data/el82-70.txt";
 
 	// Number of CUDA threads per block - this is GPU specific
 	config->gpu_max_threads_per_block = 1024;
@@ -91,14 +91,15 @@ void init_config(Config *config)
 	//Number of CUDA threads per block dimension in x and y - this is GPU specific and used for FFT and CC
 	config->gpu_max_threads_per_block_dimension = 32;
 
-	// Enable/disable CUDA timing of gridding kernel 
+	// Enable/disable CUDA timing of gridding kernel
 	config->time_gridding = true;
 
 	//Enable/disable the iFFT and Convolution Correction part of the pipeline.
-	config->perform_iFFT_CC = true;
+	// config->perform_iFFT_CC = true;
+	config->perform_iFFT_CC = false;
 }
 
-void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw, 
+void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	Complex *vis_intensities, int num_visibilities, Complex *kernel,
 	int2 *kernel_supports, int num_kernel_samples, PRECISION *prolate)
 {
@@ -154,7 +155,7 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 	}
 
 	// Execute gridding kernel
-	gridding<<<kernel_blocks, kernel_threads>>>(d_grid, d_kernel, d_supports, 
+	gridding<<<kernel_blocks, kernel_threads>>>(d_grid, d_kernel, d_supports,
 		d_vis_uvw, d_vis, num_visibilities, config->oversampling,
 		config->grid_size, config->uv_scale, config->w_scale);
 	cudaDeviceSynchronize();
@@ -168,7 +169,7 @@ void execute_gridding(Config *config, Complex *grid, Visibility *vis_uvw,
 		cudaEventElapsedTime(&milliseconds, start, stop);
 		printf(">>> UPDATE: GPU accelerated gridding completed in %f milliseconds...\n", milliseconds);
 	}
-	//free gridding memory 
+	//free gridding memory
 	CUDA_CHECK_RETURN(cudaFree(d_kernel));
 	CUDA_CHECK_RETURN(cudaFree(d_vis_uvw));
 	CUDA_CHECK_RETURN(cudaFree(d_vis));
@@ -318,10 +319,10 @@ __global__ void fftshift_2D(PRECISION2 *grid, const int width)
 {
     int row_index = threadIdx.y + blockDim.y * blockIdx.y;
     int col_index = threadIdx.x + blockDim.x * blockIdx.x;
- 
+
     if(row_index >= width || col_index >= width)
         return;
- 
+
     int a = 1 - 2 * ((row_index + col_index) & 1);
     grid[row_index * width + col_index].x *= a;
     grid[row_index * width + col_index].y *= a;
@@ -403,9 +404,9 @@ __global__ void gridding(PRECISION2 *grid, const PRECISION2 *kernel, const int2 
 	int w_kernel_offset = supports[plane_index].y;
 
 	for(int grid_v = min_grid_point.y; grid_v <= max_grid_point.y; ++grid_v)
-	{	
+	{
 		kernel_uv_index.y = abs((int)ROUND((grid_v - snapped_grid_coord.y) * oversampling));
-		
+
 		for(int grid_u = min_grid_point.x; grid_u <= max_grid_point.x; ++grid_u)
 		{
 			kernel_uv_index.x = abs((int)ROUND((grid_u - snapped_grid_coord.x) * oversampling));
@@ -422,14 +423,14 @@ __global__ void gridding(PRECISION2 *grid, const PRECISION2 *kernel, const int2 
 		}
 	}
 }
- 
+
 void save_grid_to_file(Config *config, Complex *grid, int startX, int rangeX, int startY, int rangeY)
 {
     FILE *file_real = fopen(config->grid_real_dest_file, "w");
     FILE *file_imag = fopen(config->grid_imag_dest_file, "w");
 
     if(!file_real || !file_imag)
-	{	
+	{
 		if(file_real) fclose(file_real);
 		if(file_imag) fclose(file_imag);
 		printf(">>> ERROR: Unable to create grid files, check file structure exists...\n");
@@ -466,14 +467,14 @@ bool load_kernel(Config *config, Complex *kernel, int2 *kernel_supports)
 {
 	FILE *kernel_real_file = fopen(config->kernel_real_source_file, "r");
 	FILE *kernel_imag_file = fopen(config->kernel_imag_source_file, "r");
-	
+
 	if(!kernel_real_file || !kernel_imag_file)
 	{
 		if(kernel_real_file) fclose(kernel_real_file);
 		if(kernel_imag_file) fclose(kernel_imag_file);
 		return false; // unsuccessfully loaded data
 	}
-	
+
 	int kernel_index = 0;
 
 	for(int plane_num = 0; plane_num < config->num_wproj_kernels; ++plane_num)
@@ -481,9 +482,9 @@ bool load_kernel(Config *config, Complex *kernel, int2 *kernel_supports)
 		int number_samples_in_kernel = (int) pow((kernel_supports[plane_num].x + 1) * config->oversampling, 2.0);
 
 		for(int sample_number = 0; sample_number < number_samples_in_kernel; ++sample_number)
-		{	
+		{
 			PRECISION real = 0.0;
-			PRECISION imag = 0.0; 
+			PRECISION imag = 0.0;
 
             if(SINGLE_PRECISION)
             {
@@ -516,7 +517,7 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 		printf("Unable to open visibility file...\n");
 		return false; // unsuccessfully loaded data
 	}
-	
+
 	// Configure number of visibilities from file
 	int num_vis = 0;
 	fscanf(vis_file, "%d", &num_vis);
@@ -531,7 +532,7 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 		fclose(vis_file);
 		return false;
 	}
-	
+
 	// Load visibility uvw coordinates into memory
 	PRECISION vis_u = 0.0;
 	PRECISION vis_v = 0.0;
@@ -549,14 +550,14 @@ bool load_visibilities(Config *config, Visibility **vis_uvw, Complex **vis_inten
 		else
 			fscanf(vis_file, "%lf %lf %lf %lf %lf %lf\n", &vis_u, &vis_v,
 				&vis_w, &vis_real, &vis_imag, &vis_weight);
-	
+
 		(*vis_uvw)[vis_index] = (Visibility) {
 			.u = vis_u * meters_to_wavelengths,
 			.v = vis_v * meters_to_wavelengths,
-			.w = (config->force_zero_w_term) ? (PRECISION)0.0 : vis_w * meters_to_wavelengths 
+			.w = (config->force_zero_w_term) ? (PRECISION)0.0 : vis_w * meters_to_wavelengths
 		};
 
-		if(config->right_ascension)  
+		if(config->right_ascension)
 		{
 			(*vis_uvw)[vis_index].u *= -1.0;
 			(*vis_uvw)[vis_index].w *= -1.0;

@@ -1,0 +1,20 @@
+#
+# Docker compose file for Gridder test.
+#
+# Defines:
+#   - gridder: one-shot job
+#
+version: '2.3'
+
+services:
+  gridder_test:
+    image: ${IMAGE}
+    container_name: gridder_test
+    entrypoint:
+      - /entrypoint.sh
+    command:
+      - gridder
+    restart: "no"
+    volumes:
+      - ./gridder_test_data:/gridder_test_data
+    runtime: ${RUNTIME}

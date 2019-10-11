@@ -1,0 +1,3 @@
+description: A Helm chart for deploying the cuda-gridder on Kubernetes
+name: cuda-gridder
+version: 0.1.0

@@ -1,5 +1,7 @@
 build/*
 app/*
-gridder_test_data/*
-*.run
 *.zip
+gridder_test_data/*
+run/*
+*.run
+docker-compose.yml
