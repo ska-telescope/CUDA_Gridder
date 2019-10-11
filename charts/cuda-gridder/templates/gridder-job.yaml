@@ -32,7 +32,8 @@ spec:
       - name: gridder
         image: "{{ .Values.gridder.image.registry }}/{{ .Values.gridder.image.image }}:{{ .Values.gridder.image.tag }}"
         imagePullPolicy: {{ .Values.gridder.image.pullPolicy }}
-        command: ["gridder"]
+        command: ["/entrypoint.sh"]
+        args: ["gridder"]
         volumeMounts:
           - mountPath: /gridder_test_data
             readOnly: false

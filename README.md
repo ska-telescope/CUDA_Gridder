@@ -142,3 +142,124 @@ gridder_test exited with code 0
 Use `make down` to clean up.
 
 ### Running on Kubernetes
+
+Running on Kubernetes can be done in a number of ways, that all boil down to changing the container runtime.  This can be done using Docker, ContainerD, and CRI-O, however, at time of writing the most flexible way that enabled a non-nvidia default  runtime to be configured, and use a RunTimeClass configuration for the Pod descriptor, is CRI-O.
+
+### Install CRI-O
+
+Firstly ensure CRI-O is installed by following the Instructions here: https://kubernetes.io/docs/setup/production-environment/container-runtimes/#cri-o
+
+Enable and start CRI-O  with ` sudo systemctl enable crio && sudo systemctl start crio`
+
+Amend the configuration in `/etc/crio/crio.conf` to be something similar to:
+```
+...
+  [crio.runtime.runtimes.runc]
+  runtime_path = "/usr/lib/cri-o-runc/sbin/runc"
+  runtime_type = ""
+
+  [crio.runtime.runtimes.nvidia]
+  runtime_path = "/usr/bin/nvidia-container-runtime"
+  runtime_type = ""
+...
+registries = [
+    "docker.io",
+    "quay.io",
+]
+
+insecure_registries = ['localhost:5000']
+...
+```
+Then restart CRI-O with `sudo systemctl restart crio` .
+
+Next, install `podman` with `sudo apt install podman`, and configure `/etc/containers/registries.conf`:
+```
+[registries.search]
+registries = ['docker.io']
+
+# If you need to access insecure registries, add the registry's fully-qualified name.
+# An insecure registry is one that does not have a valid SSL certificate or only does HTTP.
+[registries.insecure]
+registries = ['localhost:5000']
+```
+
+### Fix Kubernetes Configuration
+
+Kubernetes must be configured to use CRI-O.  For Minikube (which was used for testing at K8s v1.16), this is achieved with something like:
+```
+sudo minikube start --vm-driver=none --container-runtime=cri-o --extra-config=kubelet.cgroup-driver=systemd
+```
+
+### Define the RunTimeClass
+
+A RunTimeClass is required to direct running Pods towards the `nvidia` runtime.  This is created with something like:
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: node.k8s.io/v1beta1
+kind: RuntimeClass
+metadata:
+  name: nvidia
+handler: nvidia
+EOF
+```
+
+### Run the Helm chart
+
+Once the nvidia integration for Kubernetes is complete, the example Helm chart can be launched with:
+```
+$ make deploy
+ubectl describe namespace "default" || kubectl create namespace "default"
+Name:         default
+Labels:       <none>
+Annotations:  <none>
+Status:       Active
+
+No resource quota.
+
+No resource limits.
+==> Linting charts/cuda-gridder/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, no failures
+job.batch/gridder-cuda-gridder-test created
+
+$ kubectl get all
+NAMESPACE     NAME                                            READY   STATUS      RESTARTS   AGE    IP                NODE       NOMINATED
+ NODE   READINESS GATES
+default       pod/gridder-cuda-gridder-test-zsqw6             0/1     Completed   0          17m    192.168.150.144   minikube   <none>
+        <none>
+...
+$ $ make logs
+---------------------------------------------------
+Logs for pod/gridder-cuda-gridder-test-zsqw6
+kubectl -n default logs pod/gridder-cuda-gridder-test-zsqw6
+kubectl -n default get pod/gridder-cuda-gridder-test-zsqw6 -o jsonpath={.spec.initContainers[*].name}
+---------------------------------------------------
+Main Pod logs for pod/gridder-cuda-gridder-test-zsqw6
+---------------------------------------------------
+Container: gridder
+>>> UPDATE: Determining memory requirements for convolution kernels...
+>>> UPDATE: Requirements analysis complete...
+>>> UPDATE: Allocating resources for grid and convolution kernels...
+>>> UPDATE: Resource allocation successful...
+>>> UPDATE: Loading kernels...
+>>> UPDATE: Loading kernels complete...
+>>> UPDATE: Loading visibilities...
+>>> UPDATE: Loading visibilities complete...
+>>> UPDATE: LOADING IN CONVOLUTION KERNEL SAMPLES...
+>>> UPDATE: Performing W-Projection based convolutional gridding...
+>>> INFO: Using 1954 blocks, 1024 threads, for 2000000 visibilities...
+>>> UPDATE: GPU accelerated gridding completed in 162.384644 milliseconds...
+UPDATE >>> IGNORING iFFT and CC...
+UPDATE >>> COPYING GRID BACK TO CPU....
+PIPELINE COMPLETE....
+>>> UPDATE: Gridding complete...
+>>> UPDATE: Saving grid to file...
+>>> UPDATE: Save successful...
+>>> UPDATE: Cleaning up allocated resources...
+>>> UPDATE: Cleaning complete, exiting...
+---------------------------------------------------
+---------------------------------------------------
+```
+
+Cleanup with `make delete`

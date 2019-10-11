@@ -9,7 +9,7 @@ gridder:
   enabled: true
   testData: "{{ .Values.testDataPath }}gridder_test_data"
   image:
-    registry: piersharding
+    registry: localhost:5000
     image: cuda-gridder
     tag: latest
     pullPolicy: IfNotPresent
