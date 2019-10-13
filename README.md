@@ -145,6 +145,8 @@ Use `make down` to clean up.
 
 Running on Kubernetes can be done in a number of ways, that all boil down to changing the container runtime.  This can be done using Docker, ContainerD, and CRI-O, however, at time of writing the most flexible way that enabled a non-nvidia default  runtime to be configured, and use a RunTimeClass configuration for the Pod descriptor, is CRI-O.
 
+In addition to the setup described above for installing the container runtime for Docker, complete the following:
+
 ### Install CRI-O
 
 Firstly ensure CRI-O is installed by following the Instructions here: https://kubernetes.io/docs/setup/production-environment/container-runtimes/#cri-o
@@ -183,12 +185,44 @@ registries = ['docker.io']
 registries = ['localhost:5000']
 ```
 
-### Fix Kubernetes Configuration
+Finally, install `crictl` as described here: https://github.com/kubernetes-sigs/cri-tools/blob/master/docs/crictl.md
+
+
+### CRI-O Fix Kubernetes Configuration
 
 Kubernetes must be configured to use CRI-O.  For Minikube (which was used for testing at K8s v1.16), this is achieved with something like:
 ```
 sudo minikube start --vm-driver=none --container-runtime=cri-o --extra-config=kubelet.cgroup-driver=systemd
 ```
+
+### Alternatively using ContainerD
+
+It is possible to use the containerd runtime.  The simplest method of setting this up is currently by following the instructions here: https://kubernetes.io/docs/setup/production-environment/container-runtimes/#containerd .
+
+Once the basic containerd install is complete, the configuration needs to be modified to include the nvidia runtime.
+
+Edit `/etc/containerd/config.toml`, and add the following:
+```
+...
+# after      [plugins.cri.containerd.untrusted_workload_runtime]
+      [plugins.cri.containerd.runtimes.nvidia]
+        runtime_type = "io.containerd.runtime.v1.linux"
+        runtime_engine = "/usr/bin/nvidia-container-runtime"
+        runtime_root = ""
+...
+```
+
+Restart containerd with: `sudo systemctl restart containerd`.  It is best to do this after the Minikube instance has been stopped and deleted.
+
+As for CRI-O ensure that `crictl` is installed as described here: https://github.com/kubernetes-sigs/cri-tools/blob/master/docs/crictl.md
+
+### containerd Fix Kubernetes Configuration
+
+Kubernetes must be configured to use containerd.  For Minikube (which was used for testing at K8s v1.16), this is achieved with something like:
+```
+sudo minikube start --vm-driver=none --container-runtime=containerd
+```
+
 
 ### Define the RunTimeClass
 
